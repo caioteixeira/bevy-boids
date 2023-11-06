@@ -15,8 +15,15 @@ fn main() {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
+
+    let ship_texture_handle = asset_server.load("ship_C.png");
     commands.spawn(SpriteBundle {
-        texture: asset_server.load("icon.png"),
-        ..Default::default()
+        texture: ship_texture_handle.clone(),
+        transform: Transform {
+            translation: Vec3::new(0., 0., 0.),
+            scale: Vec3::new(0.3, 0.3, 0.),
+            ..Default::default()
+        },
+        ..default()
     });
 }
