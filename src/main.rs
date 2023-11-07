@@ -9,13 +9,13 @@
 use bevy::prelude::*;
 
 #[derive(Component)]
-struct Velocity(Vec3);
+struct Velocity(Vec2);
 
 #[derive(Component)]
-struct Acceleration(Vec3);
+struct Acceleration(Vec2);
 
 #[derive(Component)]
-struct Target(Vec3);
+struct Target(Vec2);
 
 #[derive(Component)]
 struct MaxSpeed(f32);
@@ -42,59 +42,74 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             texture: ship_texture_handle.clone(),
             transform: Transform {
                 translation: Vec3::new(80., 50., 0.),
-                scale: Vec3::new(0.3, 0.3, 0.3),
+                scale: Vec3::new(0.3, 0.3, 0.),
                 ..Default::default()
             },
             ..default()
         },
-        Velocity(Vec3::new(0., 0., 0.)),
-        Acceleration(Vec3::new(0., 0., 0.)),
-        Target(Vec3::new(10., 50., 0.)),
-        MaxSpeed(10.),
-        MaxForce(1.),
+        Velocity(Vec2::new(0., 0.)),
+        Acceleration(Vec2::new(0., 0.)),
+        Target(Vec2::new(100., 150.)),
+        MaxSpeed(0.2),
+        MaxForce(0.01),
     ));
+}
 
-    commands.spawn((
-        SpriteBundle {
-            texture: ship_texture_handle.clone(),
-            transform: Transform {
-                translation: Vec3::new(0., 0., 0.),
-                scale: Vec3::new(0.3, 0.3, 0.3),
-                ..Default::default()
-            },
-            ..default()
-        },
-        Velocity(Vec3::new(0., 0., 0.)),
-        Acceleration(Vec3::new(0., 0., 0.)),
-        Target(Vec3::new(10., 15., 0.)),
-        MaxSpeed(10.),
-        MaxForce(1.),
-    ));
+// direct port of processing's map function
+fn map(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> f32 {
+    start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
+}
+
+fn clamp_magnitude(value: Vec2, max: f32) -> Vec2 {
+    if value.length() > max {
+        value.normalize() * max
+    } else {
+        value
+    }
 }
 
 fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &MaxSpeed, &MaxForce)>) {
     for (transform, target, mut acceleration, max_speed, max_force) in query.iter_mut() {
-        let mut desired_velocity = target.0 - transform.translation;
-        desired_velocity = desired_velocity.normalize() * max_speed.0;
+        let location = Vec2::new(transform.translation.x, transform.translation.y);
+        let mut desired_velocity = target.0 - location;
+        info!("Target: {}", target.0);
+        info!("Position: {}", location);
+        info!("Desired Velocity: {}", desired_velocity);
+        let distance = desired_velocity.length();
+        info!("Distance: {}", distance);
 
-        let mut steering = desired_velocity - transform.translation;
-        steering = steering.normalize() * max_force.0;
+        let target_radius = 100.;
+        if distance < target_radius {
+            let m = map(distance, 0., target_radius, 0., max_speed.0);
+            info!("m: {}", m);
+            desired_velocity = desired_velocity.normalize() * m;
+        } else {
+            info!("max speed {}", max_speed.0);
+            desired_velocity = desired_velocity.normalize() * max_speed.0;
+        }
+
+        let mut steering = desired_velocity - location;
+        steering = clamp_magnitude(steering, max_force.0);
 
         acceleration.0 += steering;
     }
 }
 
-fn apply_acceleration(mut query: Query<(&mut Velocity, &Acceleration, &MaxSpeed)>) {
-    for (mut velocity, acceleration, max_speed) in query.iter_mut() {
+fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSpeed)>) {
+    for (mut velocity, mut acceleration, max_speed) in query.iter_mut() {
         velocity.0 += acceleration.0;
-        velocity.0 = velocity.0.normalize() * max_speed.0;
+        velocity.0 = clamp_magnitude(velocity.0, max_speed.0);
+
+        acceleration.0 *= 0.;
     }
 }
 
 fn update_position(mut query: Query<(&mut Transform, &Velocity)>) {
     for (mut transform, velocity) in query.iter_mut() {
-        transform.translation += velocity.0;
+        info!("Position: {}", transform.translation);
+        info!("Velocity: {}", velocity.0);
+
+        transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.);
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
-        //info!("Position: {}", transform.translation);
     }
 }
