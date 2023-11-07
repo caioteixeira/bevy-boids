@@ -68,15 +68,20 @@ fn clamp_magnitude(value: Vec2, max: f32) -> Vec2 {
     }
 }
 
-fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &MaxSpeed, &MaxForce)>) {
+fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &MaxSpeed, &MaxForce)>, mut gizmos: Gizmos) {
     for (transform, target, mut acceleration, max_speed, max_force) in query.iter_mut() {
         let location = Vec2::new(transform.translation.x, transform.translation.y);
         let mut desired_velocity = target.0 - location;
         info!("Target: {}", target.0);
+
+        gizmos.circle_2d(target.0, 10., Color::BLUE);
+
         info!("Position: {}", location);
         info!("Desired Velocity: {}", desired_velocity);
         let distance = desired_velocity.length();
         info!("Distance: {}", distance);
+
+        gizmos.line_2d(location, location + desired_velocity, Color::GREEN);
 
         let target_radius = 100.;
         if distance < target_radius {
@@ -104,10 +109,12 @@ fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSp
     }
 }
 
-fn update_position(mut query: Query<(&mut Transform, &Velocity)>) {
+fn update_position(mut query: Query<(&mut Transform, &Velocity)>, mut gizmos : Gizmos) {
     for (mut transform, velocity) in query.iter_mut() {
         info!("Position: {}", transform.translation);
         info!("Velocity: {}", velocity.0);
+
+        gizmos.line(transform.translation, transform.translation + Vec3::new(velocity.0.x, velocity.0.y, 0.) * 100., Color::RED);
 
         transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.);
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
