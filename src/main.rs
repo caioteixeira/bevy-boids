@@ -9,13 +9,13 @@
 use bevy::prelude::*;
 
 #[derive(Component)]
-struct Velocity(Vec2);
+struct Velocity(Vec3);
 
 #[derive(Component)]
-struct Acceleration(Vec2);
+struct Acceleration(Vec3);
 
 #[derive(Component)]
-struct Target(Vec2);
+struct Target(Vec3);
 
 #[derive(Component)]
 struct MaxSpeed(f32);
@@ -47,9 +47,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             ..default()
         },
-        Velocity(Vec2::new(0., 0.)),
-        Acceleration(Vec2::new(0., 0.)),
-        Target(Vec2::new(100., 150.)),
+        Velocity(Vec3::new(0., 0., 0.)),
+        Acceleration(Vec3::new(0., 0., 0.)),
+        Target(Vec3::new(100., 150., 0.)),
         MaxSpeed(0.2),
         MaxForce(0.01),
     ));
@@ -60,7 +60,7 @@ fn map(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> f32 {
     start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
 }
 
-fn clamp_magnitude(value: Vec2, max: f32) -> Vec2 {
+fn clamp_magnitude(value: Vec3, max: f32) -> Vec3 {
     if value.length() > max {
         value.normalize() * max
     } else {
@@ -70,18 +70,18 @@ fn clamp_magnitude(value: Vec2, max: f32) -> Vec2 {
 
 fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &MaxSpeed, &MaxForce)>, mut gizmos: Gizmos) {
     for (transform, target, mut acceleration, max_speed, max_force) in query.iter_mut() {
-        let location = Vec2::new(transform.translation.x, transform.translation.y);
+        let location = transform.translation;
         let mut desired_velocity = target.0 - location;
         info!("Target: {}", target.0);
 
-        gizmos.circle_2d(target.0, 10., Color::BLUE);
+        gizmos.circle_2d(Vec2::new(target.0.x, target.0.y), 10., Color::BLUE);
 
         info!("Position: {}", location);
         info!("Desired Velocity: {}", desired_velocity);
         let distance = desired_velocity.length();
         info!("Distance: {}", distance);
 
-        gizmos.line_2d(location, location + desired_velocity, Color::GREEN);
+        gizmos.line(location, location + desired_velocity, Color::GREEN);
 
         let target_radius = 100.;
         if distance < target_radius {
@@ -114,7 +114,7 @@ fn update_position(mut query: Query<(&mut Transform, &Velocity)>, mut gizmos : G
         info!("Position: {}", transform.translation);
         info!("Velocity: {}", velocity.0);
 
-        gizmos.line(transform.translation, transform.translation + Vec3::new(velocity.0.x, velocity.0.y, 0.) * 100., Color::RED);
+        gizmos.line(transform.translation, transform.translation + velocity.0 * 100., Color::RED);
 
         transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.);
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
