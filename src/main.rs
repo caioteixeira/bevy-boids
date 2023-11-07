@@ -1,3 +1,5 @@
+// Based on: https://natureofcode.com/book/chapter-6-autonomous-agents/
+
 // Bevy code commonly triggers these lints and they may be important signals
 // about code quality. They are sometimes hard to avoid though, and the CI
 // workflow treats them as errors, so this allows them throughout the project.
@@ -25,7 +27,9 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(Update, (seek, apply_acceleration, update_position))
+        .add_systems(Update, seek)
+        .add_systems(Update, apply_acceleration.after(seek))
+        .add_systems(Update, update_position.after(apply_acceleration))
         .run();
 }
 
@@ -38,14 +42,31 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             texture: ship_texture_handle.clone(),
             transform: Transform {
                 translation: Vec3::new(80., 50., 0.),
-                scale: Vec3::new(0.3, 0.3, 0.),
+                scale: Vec3::new(0.3, 0.3, 0.3),
                 ..Default::default()
             },
             ..default()
         },
         Velocity(Vec3::new(0., 0., 0.)),
         Acceleration(Vec3::new(0., 0., 0.)),
-        Target(Vec3::new(100., 500., 0.)),
+        Target(Vec3::new(10., 50., 0.)),
+        MaxSpeed(10.),
+        MaxForce(1.),
+    ));
+
+    commands.spawn((
+        SpriteBundle {
+            texture: ship_texture_handle.clone(),
+            transform: Transform {
+                translation: Vec3::new(0., 0., 0.),
+                scale: Vec3::new(0.3, 0.3, 0.3),
+                ..Default::default()
+            },
+            ..default()
+        },
+        Velocity(Vec3::new(0., 0., 0.)),
+        Acceleration(Vec3::new(0., 0., 0.)),
+        Target(Vec3::new(10., 15., 0.)),
         MaxSpeed(10.),
         MaxForce(1.),
     ));
@@ -74,5 +95,6 @@ fn update_position(mut query: Query<(&mut Transform, &Velocity)>) {
     for (mut transform, velocity) in query.iter_mut() {
         transform.translation += velocity.0;
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
+        //info!("Position: {}", transform.translation);
     }
 }
