@@ -50,8 +50,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         Velocity(Vec3::new(0., 0., 0.)),
         Acceleration(Vec3::new(0., 0., 0.)),
         Target(Vec3::new(100., 150., 0.)),
-        MaxSpeed(0.2),
-        MaxForce(0.01),
+        MaxSpeed(4.),
+        MaxForce(0.1),
     ));
 }
 
@@ -68,8 +68,8 @@ fn clamp_magnitude(value: Vec3, max: f32) -> Vec3 {
     }
 }
 
-fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &MaxSpeed, &MaxForce)>, mut gizmos: Gizmos) {
-    for (transform, target, mut acceleration, max_speed, max_force) in query.iter_mut() {
+fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &Velocity, &MaxSpeed, &MaxForce)>, mut gizmos: Gizmos) {
+    for (transform, target, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
         let location = transform.translation;
         let mut desired_velocity = target.0 - location;
         info!("Target: {}", target.0);
@@ -93,7 +93,7 @@ fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &MaxSpeed, &Ma
             desired_velocity = desired_velocity.normalize() * max_speed.0;
         }
 
-        let mut steering = desired_velocity - location;
+        let mut steering = desired_velocity - velocity.0;
         steering = clamp_magnitude(steering, max_force.0);
 
         acceleration.0 += steering;
