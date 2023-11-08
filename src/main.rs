@@ -7,6 +7,7 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 use bevy::prelude::*;
+use rand::Rng;
 
 #[derive(Component)]
 struct Velocity(Vec3);
@@ -28,8 +29,8 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_systems(Update, seek)
-        .add_systems(Update, apply_acceleration.after(seek))
-        .add_systems(Update, update_position.after(apply_acceleration))
+        .add_systems(Update, apply_acceleration)
+        .add_systems(Update, update_position)
         .run();
 }
 
@@ -37,22 +38,31 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
 
     let ship_texture_handle = asset_server.load("ship_C.png");
-    commands.spawn((
-        SpriteBundle {
-            texture: ship_texture_handle.clone(),
-            transform: Transform {
-                translation: Vec3::new(80., 50., 0.),
-                scale: Vec3::new(0.3, 0.3, 0.),
-                ..Default::default()
+
+    let mut rng = rand::thread_rng();
+
+    for _i in 0..10 {
+        commands.spawn((
+            SpriteBundle {
+                texture: ship_texture_handle.clone(),
+                transform: Transform {
+                    translation: Vec3::new(
+                        rng.gen_range(-500.0..500.0),
+                        rng.gen_range(-500.0..500.0),
+                        0.,
+                    ),
+                    scale: Vec3::new(0.3, 0.3, 0.),
+                    ..Default::default()
+                },
+                ..default()
             },
-            ..default()
-        },
-        Velocity(Vec3::new(0., 0., 0.)),
-        Acceleration(Vec3::new(0., 0., 0.)),
-        Target(Vec3::new(100., 150., 0.)),
-        MaxSpeed(4.),
-        MaxForce(0.1),
-    ));
+            Velocity(Vec3::new(0., 0., 0.)),
+            Acceleration(Vec3::new(0., 0., 0.)),
+            Target(Vec3::new(100., 150., 0.)),
+            MaxSpeed(4.),
+            MaxForce(0.1),
+        ));
+    }
 }
 
 // direct port of processing's map function
@@ -68,9 +78,21 @@ fn clamp_magnitude(value: Vec3, max: f32) -> Vec3 {
     }
 }
 
-fn seek(mut query: Query<(&Transform, &Target, &mut Acceleration, &Velocity, &MaxSpeed, &MaxForce)>, mut gizmos: Gizmos) {
+fn seek(
+    mut query: Query<(
+        &Transform,
+        &Target,
+        &mut Acceleration,
+        &Velocity,
+        &MaxSpeed,
+        &MaxForce,
+    )>,
+    mut gizmos: Gizmos,
+) {
     for (transform, target, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
         let location = transform.translation;
+
+        // TODO: Retrieve the desired velocity from a pre computed flow field
         let mut desired_velocity = target.0 - location;
 
         gizmos.circle_2d(Vec2::new(target.0.x, target.0.y), 10., Color::BLUE);
@@ -103,9 +125,13 @@ fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSp
     }
 }
 
-fn update_position(mut query: Query<(&mut Transform, &Velocity)>, mut gizmos : Gizmos) {
+fn update_position(mut query: Query<(&mut Transform, &Velocity)>, mut gizmos: Gizmos) {
     for (mut transform, velocity) in query.iter_mut() {
-        gizmos.line(transform.translation, transform.translation + velocity.0 * 100., Color::RED);
+        gizmos.line(
+            transform.translation,
+            transform.translation + velocity.0 * 100.,
+            Color::RED,
+        );
 
         transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.);
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
