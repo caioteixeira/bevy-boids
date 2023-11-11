@@ -6,13 +6,19 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use bevy::prelude::*;
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use rand::Rng;
 
 #[derive(Resource)]
 struct FlowField {
     field: Vec<Vec<Vec3>>,
     resolution: f32,
+}
+
+#[derive(Resource)]
+struct ForceMultipliers {
+    seek: f32,
+    separation: f32,
 }
 
 impl FlowField {
@@ -83,6 +89,10 @@ fn main() {
             end: Vec3::new(500., 0., 0.),
             radius: 20.,
         })
+        .insert_resource(ForceMultipliers {
+            seek: 0.5,
+            separation: 1.5,
+        })
         .add_systems(Startup, setup)
         .add_systems(Update, compute_flow_field)
         .add_systems(Update, seek_flow_field.after(compute_flow_field))
@@ -95,26 +105,30 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     commands.spawn(Camera2dBundle::default());
 
-    let ship_texture_handle = asset_server.load("ship_C.png");
+    let material_handle = materials.add(ColorMaterial::from(Color::WHITE));
 
     let mut rng = rand::thread_rng();
 
     commands.spawn(Target(Vec3::new(0., 0., 0.)));
 
-    for _i in 0..100 {
+    for _i in 0..1000 {
         commands.spawn((
-            SpriteBundle {
-                texture: ship_texture_handle.clone(),
+            MaterialMesh2dBundle {
+                mesh: meshes.add(shape::Circle::new(5.).into()).into(),
+                material: material_handle.clone(),
                 transform: Transform {
                     translation: Vec3::new(
-                        rng.gen_range(-200.0..200.0),
-                        rng.gen_range(-200.0..200.0),
+                        rng.gen_range(-500.0..500.0),
+                        rng.gen_range(-500.0..500.0),
                         0.,
                     ),
-                    scale: Vec3::new(0.3, 0.3, 0.),
                     ..Default::default()
                 },
                 ..default()
@@ -198,6 +212,7 @@ fn seek_flow_field(
     )>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     flow_field: Res<FlowField>,
+    force_multipliers: Res<ForceMultipliers>,
     mut gizmos: Gizmos,
 ) {
     let (camera, camera_transform) = camera_query.single();
@@ -223,7 +238,7 @@ fn seek_flow_field(
         let mut steering = desired_velocity - velocity.0;
         steering = clamp_magnitude(steering, max_force.0);
 
-        acceleration.0 += steering;
+        acceleration.0 += steering * force_multipliers.seek;
     }
 }
 
@@ -314,8 +329,9 @@ fn separate(
         &MaxForce,
     )>,
     other_query: Query<(&Transform, &Velocity)>,
+    force_multipliers: Res<ForceMultipliers>,
 ) {
-    let desired_separation = 25.;
+    let desired_separation = 30.;
 
     for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
         let mut sum = Vec3::new(0., 0., 0.);
@@ -341,20 +357,15 @@ fn separate(
             sum *= max_speed.0;
             let mut steer = sum - velocity.0;
             steer = clamp_magnitude(steer, max_force.0);
-            acceleration.0 += steer;
+            acceleration.0 += steer * force_multipliers.separation;
         }
     }
 }
 
 fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSpeed)>) {
     for (mut velocity, mut acceleration, max_speed) in query.iter_mut() {
-        info!("velocity: {:?}", velocity.0);
-        info!("acceleration: {:?}", acceleration.0);
-
         velocity.0 += acceleration.0;
         velocity.0 = clamp_magnitude(velocity.0, max_speed.0);
-
-        info!("velocity: {:?}", velocity.0);
 
         acceleration.0 *= 0.;
     }
