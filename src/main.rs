@@ -6,10 +6,7 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use bevy::{
-    input::mouse::MouseMotion, prelude::*, render::camera, sprite::MaterialMesh2dBundle,
-    window::WindowMode,
-};
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle, window::WindowMode};
 use rand::Rng;
 
 #[derive(Resource)]
@@ -22,6 +19,8 @@ struct FlowField {
 struct ForceMultipliers {
     seek: f32,
     separation: f32,
+    alignment: f32,
+    cohesion: f32,
 }
 
 impl FlowField {
@@ -90,12 +89,16 @@ fn main() {
         .insert_resource(ForceMultipliers {
             seek: 0.5,
             separation: 1.5,
+            alignment: 1.0,
+            cohesion: 1.0,
         })
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, update_target_with_mouse_pos)
         .add_systems(Update, compute_flow_field)
         .add_systems(Update, seek_flow_field.after(compute_flow_field))
         .add_systems(Update, separate)
+        .add_systems(Update, align)
+        .add_systems(Update, cohesion)
         .add_systems(Update, apply_acceleration)
         .add_systems(Update, update_position)
         .run();
@@ -285,16 +288,95 @@ fn separate(
         }
 
         if count > 0 {
-            //info!("count: {}", count);
-            //info!("sum: {:?}", sum);
-
             sum /= count as f32;
-            sum = sum.normalize();
+            sum = sum.normalize_or_zero();
             sum *= max_speed.0;
             let mut steer = sum - velocity.0;
             steer = clamp_magnitude(steer, max_force.0);
             acceleration.0 += steer * force_multipliers.separation;
         }
+    }
+}
+
+fn align(
+    mut query: Query<(
+        &Transform,
+        &mut Acceleration,
+        &Velocity,
+        &MaxSpeed,
+        &MaxForce,
+    )>,
+    other_query: Query<(&Transform, &Velocity)>,
+    force_multipliers: Res<ForceMultipliers>,
+) {
+    let neighbor_distance = 50.;
+
+    for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
+        let mut sum = Vec3::new(0., 0., 0.);
+        let mut count = 0;
+
+        for (other_transform, other_velocity) in other_query.iter() {
+            let d = transform.translation.distance(other_transform.translation);
+
+            if d > 0. && d < neighbor_distance {
+                sum += other_velocity.0;
+                count += 1;
+            }
+        }
+
+        if count == 0 {
+            continue;
+        }
+
+        sum /= count as f32;
+        sum = sum.normalize_or_zero();
+        sum *= max_speed.0;
+
+        let mut steer = sum - velocity.0;
+        steer = clamp_magnitude(steer, max_force.0);
+        acceleration.0 += steer * force_multipliers.alignment;
+    }
+}
+
+fn cohesion(
+    mut query: Query<(
+        &Transform,
+        &mut Acceleration,
+        &Velocity,
+        &MaxSpeed,
+        &MaxForce,
+    )>,
+    other_query: Query<(&Transform, &Velocity)>,
+    force_multipliers: Res<ForceMultipliers>,
+) {
+    let neighbor_distance = 50.;
+
+    for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
+        let mut sum = Vec3::new(0., 0., 0.);
+        let mut count = 0;
+
+        for (other_transform, other_velocity) in other_query.iter() {
+            let d = transform.translation.distance(other_transform.translation);
+
+            if d > 0. && d < neighbor_distance {
+                sum += other_transform.translation;
+                count += 1;
+            }
+        }
+
+        if count == 0 {
+            continue;
+        }
+
+        sum /= count as f32;
+
+        let mut desired_position = sum - transform.translation;
+        desired_position = desired_position.normalize_or_zero();
+        desired_position *= max_speed.0;
+
+        let mut steer = desired_position - velocity.0;
+        steer = clamp_magnitude(steer, max_force.0);
+        acceleration.0 += steer * force_multipliers.cohesion;
     }
 }
 
