@@ -6,7 +6,10 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+use bevy::{
+    input::mouse::MouseMotion, prelude::*, render::camera, sprite::MaterialMesh2dBundle,
+    window::WindowMode,
+};
 use rand::Rng;
 
 #[derive(Resource)]
@@ -67,7 +70,19 @@ struct FlowFieldFollower;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Bevy Boids".into(),
+                mode: WindowMode::Windowed,
+
+                // Tells wasm to resize the window according to the available canvas
+                fit_canvas_to_parent: true,
+                // Tells wasm not to override default event handling, like F5, Ctrl+R etc.
+                prevent_default_event_handling: false,
+                ..default()
+            }),
+            ..default()
+        }))
         .insert_resource(FlowField {
             field: Vec::new(),
             resolution: 5.,
@@ -77,6 +92,7 @@ fn main() {
             separation: 1.5,
         })
         .add_systems(Startup, setup)
+        .add_systems(PreUpdate, update_target_with_mouse_pos)
         .add_systems(Update, compute_flow_field)
         .add_systems(Update, seek_flow_field.after(compute_flow_field))
         .add_systems(Update, separate)
@@ -92,21 +108,21 @@ fn setup(
 ) {
     commands.spawn(Camera2dBundle::default());
 
-    let material_handle = materials.add(ColorMaterial::from(Color::WHITE));
+    let material_handle = materials.add(ColorMaterial::from(Color::GREEN));
 
     let mut rng = rand::thread_rng();
 
     commands.spawn(Target(Vec3::new(0., 0., 0.)));
 
-    for _i in 0..1000 {
+    for _i in 0..2000 {
         commands.spawn((
             MaterialMesh2dBundle {
-                mesh: meshes.add(shape::Circle::new(5.).into()).into(),
+                mesh: meshes.add(shape::Circle::new(2.).into()).into(),
                 material: material_handle.clone(),
                 transform: Transform {
                     translation: Vec3::new(
-                        rng.gen_range(-500.0..500.0),
-                        rng.gen_range(-500.0..500.0),
+                        rng.gen_range(-1000.0..1000.0),
+                        rng.gen_range(-800.0..800.0),
                         0.,
                     ),
                     ..Default::default()
@@ -119,6 +135,24 @@ fn setup(
             MaxForce(0.1),
             FlowFieldFollower,
         ));
+    }
+}
+
+fn update_target_with_mouse_pos(
+    mut target_query: Query<&mut Target>,
+    mut mouse_motion_events: EventReader<CursorMoved>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+) {
+    let (camera, camera_transform) = camera_query.single();
+
+    for event in mouse_motion_events.read() {
+        let raw_world_position = camera
+            .viewport_to_world_2d(camera_transform, event.position)
+            .unwrap();
+
+        for mut target in target_query.iter_mut() {
+            target.0 = Vec3::new(raw_world_position.x, raw_world_position.y, 0.);
+        }
     }
 }
 
@@ -147,7 +181,7 @@ fn compute_flow_field(
 
     // Compute flow field
 
-    gizmos.circle_2d(Vec2::new(target.x, target.y), 10., Color::BLUE);
+    gizmos.circle_2d(Vec2::new(target.x, target.y), 5., Color::BLUE);
 
     for x in 0..field_width as usize {
         for y in 0..field_height as usize {
@@ -233,7 +267,7 @@ fn separate(
     other_query: Query<(&Transform, &Velocity)>,
     force_multipliers: Res<ForceMultipliers>,
 ) {
-    let desired_separation = 30.;
+    let desired_separation = 20.;
 
     for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
         let mut sum = Vec3::new(0., 0., 0.);
