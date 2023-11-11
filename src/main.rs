@@ -94,6 +94,7 @@ fn main() {
         })
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, update_target_with_mouse_pos)
+        .add_systems(PreUpdate, wrap_around_screen)
         .add_systems(Update, compute_flow_field)
         .add_systems(Update, seek_flow_field.after(compute_flow_field))
         .add_systems(Update, separate)
@@ -155,6 +156,29 @@ fn update_target_with_mouse_pos(
 
         for mut target in target_query.iter_mut() {
             target.0 = Vec3::new(raw_world_position.x, raw_world_position.y, 0.);
+        }
+    }
+}
+
+fn wrap_around_screen(
+    mut query: Query<(&mut Transform, &mut Velocity)>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+) {
+    let (camera, _) = camera_query.single();
+
+    for (mut transform, _) in query.iter_mut() {
+        let viewport_size = camera.logical_target_size().unwrap();
+
+        if transform.translation.x > viewport_size.x / 2. {
+            transform.translation.x = -viewport_size.x / 2.;
+        } else if transform.translation.x < -viewport_size.x / 2. {
+            transform.translation.x = viewport_size.x / 2.;
+        }
+
+        if transform.translation.y > viewport_size.y / 2. {
+            transform.translation.y = -viewport_size.y / 2.;
+        } else if transform.translation.y < -viewport_size.y / 2. {
+            transform.translation.y = viewport_size.y / 2.;
         }
     }
 }
