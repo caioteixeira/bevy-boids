@@ -254,7 +254,7 @@ fn seek_flow_field(
     camera_query: Query<(&Camera, &GlobalTransform)>,
     flow_field: Res<FlowField>,
     force_multipliers: Res<ForceMultipliers>,
-    mut gizmos: Gizmos,
+    //mut gizmos: Gizmos,
 ) {
     let (camera, camera_transform) = camera_query.single();
 
@@ -379,7 +379,7 @@ fn cohesion(
         let mut sum = Vec3::new(0., 0., 0.);
         let mut count = 0;
 
-        for (other_transform, other_velocity) in other_query.iter() {
+        for (other_transform, _) in other_query.iter() {
             let d = transform.translation.distance(other_transform.translation);
 
             if d > 0. && d < neighbor_distance {
@@ -413,7 +413,7 @@ fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSp
     }
 }
 
-fn update_position(mut query: Query<(&mut Transform, &Velocity)>, mut gizmos: Gizmos) {
+fn update_position(mut query: Query<(&mut Transform, &Velocity)> /*mut gizmos: Gizmos*/) {
     for (mut transform, velocity) in query.iter_mut() {
         /*gizmos.line(
             transform.translation,
