@@ -47,13 +47,6 @@ impl FlowField {
     }
 }
 
-#[derive(Resource)]
-struct ShipPath {
-    start: Vec3,
-    end: Vec3,
-    radius: f32,
-}
-
 #[derive(Component)]
 struct Velocity(Vec3);
 
@@ -70,11 +63,6 @@ struct MaxSpeed(f32);
 struct MaxForce(f32);
 
 #[derive(Component)]
-struct PathFollower {
-    target: Vec3,
-}
-
-#[derive(Component)]
 struct FlowFieldFollower;
 
 fn main() {
@@ -84,11 +72,6 @@ fn main() {
             field: Vec::new(),
             resolution: 5.,
         })
-        .insert_resource(ShipPath {
-            start: Vec3::new(-500., 0., 0.),
-            end: Vec3::new(500., 0., 0.),
-            radius: 20.,
-        })
         .insert_resource(ForceMultipliers {
             seek: 0.5,
             separation: 1.5,
@@ -96,12 +79,9 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, compute_flow_field)
         .add_systems(Update, seek_flow_field.after(compute_flow_field))
-        .add_systems(Update, follow_path)
-        .add_systems(Update, seek_path)
         .add_systems(Update, separate)
         .add_systems(Update, apply_acceleration)
         .add_systems(Update, update_position)
-        //.add_systems(Update, draw_path)
         .run();
 }
 
@@ -242,84 +222,6 @@ fn seek_flow_field(
     }
 }
 
-fn get_normal_point(p: Vec3, a: Vec3, b: Vec3) -> Vec3 {
-    let ap = p - a;
-    let mut ab = b - a;
-
-    ab = ab.normalize_or_zero();
-    ab = ab * ap.dot(ab);
-    a + ab
-}
-
-fn follow_path(
-    mut query: Query<(&Transform, &Velocity, &mut PathFollower)>,
-    path: Res<ShipPath>,
-    mut gizmos: Gizmos,
-) {
-    for (transform, velocity, mut path_follower) in query.iter_mut() {
-        let location: Vec3 = transform.translation;
-
-        let mut predict = velocity.0;
-        predict = predict.normalize_or_zero() * 5.;
-
-        let predict_loc = location + predict;
-        gizmos.circle_2d(Vec2::new(predict_loc.x, predict_loc.y), 10., Color::WHITE);
-
-        let normal_point = get_normal_point(predict_loc, path.start, path.end);
-        gizmos.circle_2d(Vec2::new(normal_point.x, normal_point.y), 10., Color::RED);
-
-        let direction = (path.end - path.start).normalize_or_zero() * 5.;
-        let target = normal_point + direction;
-
-        gizmos.circle_2d(Vec2::new(target.x, target.y), 10., Color::YELLOW);
-        gizmos.line(location, target, Color::PINK);
-
-        let distance = (normal_point - predict_loc).length();
-        info!("distance: {}", distance);
-
-        if distance > path.radius {
-            path_follower.target = target;
-        }
-    }
-}
-
-fn seek_path(
-    mut query: Query<(
-        &Transform,
-        &mut Acceleration,
-        &Velocity,
-        &MaxSpeed,
-        &MaxForce,
-        &PathFollower,
-    )>,
-    mut gizmos: Gizmos,
-) {
-    for (transform, mut acceleration, velocity, max_speed, max_force, path_follower) in
-        query.iter_mut()
-    {
-        let location = transform.translation;
-
-        let mut desired_velocity = path_follower.target - location;
-
-        gizmos.line(location, location + desired_velocity, Color::GREEN);
-
-        let target_radius = 100.;
-        let distance: f32 = desired_velocity.length();
-
-        if distance < target_radius {
-            let m = map(distance, 0., target_radius, 0., max_speed.0);
-            desired_velocity = desired_velocity.normalize_or_zero() * m;
-        } else {
-            desired_velocity = desired_velocity.normalize_or_zero() * max_speed.0;
-        }
-
-        let mut steering = desired_velocity - velocity.0;
-        steering = clamp_magnitude(steering, max_force.0);
-
-        acceleration.0 += steering;
-    }
-}
-
 fn separate(
     mut query: Query<(
         &Transform,
@@ -382,8 +284,4 @@ fn update_position(mut query: Query<(&mut Transform, &Velocity)>, mut gizmos: Gi
         transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.);
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
     }
-}
-
-fn draw_path(mut gizmos: Gizmos, path: Res<ShipPath>) {
-    gizmos.line(path.start, path.end, Color::BLUE);
 }
