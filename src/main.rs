@@ -68,6 +68,9 @@ struct PathFollower {
     target: Vec3,
 }
 
+#[derive(Component)]
+struct FlowFieldFollower;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -82,12 +85,13 @@ fn main() {
         })
         .add_systems(Startup, setup)
         .add_systems(Update, compute_flow_field)
-        .add_systems(Update, seek.after(compute_flow_field))
+        .add_systems(Update, seek_flow_field.after(compute_flow_field))
         .add_systems(Update, follow_path)
         .add_systems(Update, seek_path)
+        .add_systems(Update, separate)
         .add_systems(Update, apply_acceleration)
         .add_systems(Update, update_position)
-        .add_systems(Update, draw_path)
+        //.add_systems(Update, draw_path)
         .run();
 }
 
@@ -100,14 +104,14 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     commands.spawn(Target(Vec3::new(0., 0., 0.)));
 
-    for _i in 0..1 {
+    for _i in 0..100 {
         commands.spawn((
             SpriteBundle {
                 texture: ship_texture_handle.clone(),
                 transform: Transform {
                     translation: Vec3::new(
-                        rng.gen_range(-500.0..-200.0),
-                        rng.gen_range(-300.0..300.0),
+                        rng.gen_range(-200.0..200.0),
+                        rng.gen_range(-200.0..200.0),
                         0.,
                     ),
                     scale: Vec3::new(0.3, 0.3, 0.),
@@ -117,11 +121,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             Velocity(Vec3::new(0., 0., 0.)),
             Acceleration(Vec3::new(0., 0., 0.)),
-            MaxSpeed(2.),
-            MaxForce(0.05),
-            PathFollower {
-                target: Vec3::new(500., 0., 0.),
-            },
+            MaxSpeed(4.),
+            MaxForce(0.1),
+            FlowFieldFollower,
         ));
     }
 }
@@ -185,14 +187,14 @@ fn clamp_magnitude(value: Vec3, max: f32) -> Vec3 {
     }
 }
 
-fn seek(
+fn seek_flow_field(
     mut query: Query<(
         &Transform,
         &mut Acceleration,
         &Velocity,
         &MaxSpeed,
         &MaxForce,
-        Without<PathFollower>,
+        With<FlowFieldFollower>,
     )>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     flow_field: Res<FlowField>,
@@ -206,9 +208,9 @@ fn seek(
         let mut desired_velocity =
             flow_field.get_desired_velocity_for_world_position(camera, camera_transform, location);
 
-        let distance = desired_velocity.length();
+        let distance: f32 = desired_velocity.length();
 
-        gizmos.line(location, location + desired_velocity, Color::GREEN);
+        //gizmos.line(location, location + desired_velocity, Color::GREEN);
 
         let target_radius = 100.;
         if distance < target_radius {
@@ -286,7 +288,15 @@ fn seek_path(
 
         gizmos.line(location, location + desired_velocity, Color::GREEN);
 
-        desired_velocity = desired_velocity.normalize_or_zero() * max_speed.0;
+        let target_radius = 100.;
+        let distance: f32 = desired_velocity.length();
+
+        if distance < target_radius {
+            let m = map(distance, 0., target_radius, 0., max_speed.0);
+            desired_velocity = desired_velocity.normalize_or_zero() * m;
+        } else {
+            desired_velocity = desired_velocity.normalize_or_zero() * max_speed.0;
+        }
 
         let mut steering = desired_velocity - velocity.0;
         steering = clamp_magnitude(steering, max_force.0);
@@ -295,10 +305,56 @@ fn seek_path(
     }
 }
 
+fn separate(
+    mut query: Query<(
+        &Transform,
+        &mut Acceleration,
+        &Velocity,
+        &MaxSpeed,
+        &MaxForce,
+    )>,
+    other_query: Query<(&Transform, &Velocity)>,
+) {
+    let desired_separation = 25.;
+
+    for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
+        let mut sum = Vec3::new(0., 0., 0.);
+        let mut count = 0;
+
+        for (other_transform, _) in other_query.iter() {
+            let d = transform.translation.distance(other_transform.translation);
+
+            if (d > 0.) && (d < desired_separation) {
+                let mut diff = transform.translation - other_transform.translation;
+                diff = diff.normalize_or_zero() / d;
+                sum += diff;
+                count += 1;
+            }
+        }
+
+        if count > 0 {
+            //info!("count: {}", count);
+            //info!("sum: {:?}", sum);
+
+            sum /= count as f32;
+            sum = sum.normalize();
+            sum *= max_speed.0;
+            let mut steer = sum - velocity.0;
+            steer = clamp_magnitude(steer, max_force.0);
+            acceleration.0 += steer;
+        }
+    }
+}
+
 fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSpeed)>) {
     for (mut velocity, mut acceleration, max_speed) in query.iter_mut() {
+        info!("velocity: {:?}", velocity.0);
+        info!("acceleration: {:?}", acceleration.0);
+
         velocity.0 += acceleration.0;
         velocity.0 = clamp_magnitude(velocity.0, max_speed.0);
+
+        info!("velocity: {:?}", velocity.0);
 
         acceleration.0 *= 0.;
     }
@@ -306,11 +362,11 @@ fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSp
 
 fn update_position(mut query: Query<(&mut Transform, &Velocity)>, mut gizmos: Gizmos) {
     for (mut transform, velocity) in query.iter_mut() {
-        gizmos.line(
+        /*gizmos.line(
             transform.translation,
             transform.translation + velocity.0 * 100.,
             Color::RED,
-        );
+        );*/
 
         transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.);
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
