@@ -6,9 +6,14 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle, window::WindowMode};
+use bevy::{
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    prelude::*,
+    sprite::MaterialMesh2dBundle,
+    window::WindowMode,
+};
 use boids_plugin::{BoidBundle, BoidsPlugin};
-use flow_field_plugin::{FlowFieldFollower, FlowFieldPlugin};
+use flow_field_plugin::FlowFieldFollower;
 use rand::Rng;
 
 pub mod boids_plugin;
@@ -29,8 +34,10 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(LogDiagnosticsPlugin::default())
+        .add_plugins(FrameTimeDiagnosticsPlugin)
         .add_plugins(BoidsPlugin)
-        .add_plugins(FlowFieldPlugin)
+        //.add_plugins(FlowFieldPlugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -46,7 +53,7 @@ fn setup(
 
     let mut rng = rand::thread_rng();
 
-    for _i in 0..2000 {
+    for _i in 0..4000 {
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: meshes.add(shape::Circle::new(2.).into()).into(),
