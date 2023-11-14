@@ -53,7 +53,7 @@ fn setup(
 
     let mut rng = rand::thread_rng();
 
-    for _i in 0..4000 {
+    for _i in 0..8000 {
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: meshes.add(shape::Circle::new(2.).into()).into(),

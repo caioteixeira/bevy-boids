@@ -97,30 +97,32 @@ fn separate(
 ) {
     let desired_separation = 20.;
 
-    for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
-        let mut sum = Vec3::new(0., 0., 0.);
-        let mut count = 0;
+    query.par_iter_mut().for_each(
+        |(transform, mut acceleration, velocity, max_speed, max_force)| {
+            let mut sum = Vec3::new(0., 0., 0.);
+            let mut count = 0;
 
-        for (other_transform, _) in other_query.iter() {
-            let d = transform.translation.distance(other_transform.translation);
+            for (other_transform, _) in other_query.iter() {
+                let d = transform.translation.distance(other_transform.translation);
 
-            if (d > 0.) && (d < desired_separation) {
-                let mut diff = transform.translation - other_transform.translation;
-                diff = diff.normalize_or_zero() / d;
-                sum += diff;
-                count += 1;
+                if (d > 0.) && (d < desired_separation) {
+                    let mut diff = transform.translation - other_transform.translation;
+                    diff = diff.normalize_or_zero() / d;
+                    sum += diff;
+                    count += 1;
+                }
             }
-        }
 
-        if count > 0 {
-            sum /= count as f32;
-            sum = sum.normalize_or_zero();
-            sum *= max_speed.0;
-            let mut steer = sum - velocity.0;
-            steer = clamp_magnitude(steer, max_force.0);
-            acceleration.0 += steer * force_multipliers.separation;
-        }
-    }
+            if count > 0 {
+                sum /= count as f32;
+                sum = sum.normalize_or_zero();
+                sum *= max_speed.0;
+                let mut steer = sum - velocity.0;
+                steer = clamp_magnitude(steer, max_force.0);
+                acceleration.0 += steer * force_multipliers.separation;
+            }
+        },
+    );
 }
 
 fn align(
@@ -136,31 +138,33 @@ fn align(
 ) {
     let neighbor_distance = 50.;
 
-    for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
-        let mut sum = Vec3::new(0., 0., 0.);
-        let mut count = 0;
+    query.par_iter_mut().for_each(
+        |(transform, mut acceleration, velocity, max_speed, max_force)| {
+            let mut sum = Vec3::new(0., 0., 0.);
+            let mut count = 0;
 
-        for (other_transform, other_velocity) in other_query.iter() {
-            let d = transform.translation.distance(other_transform.translation);
+            for (other_transform, other_velocity) in other_query.iter() {
+                let d = transform.translation.distance(other_transform.translation);
 
-            if d > 0. && d < neighbor_distance {
-                sum += other_velocity.0;
-                count += 1;
+                if d > 0. && d < neighbor_distance {
+                    sum += other_velocity.0;
+                    count += 1;
+                }
             }
-        }
 
-        if count == 0 {
-            continue;
-        }
+            if count == 0 {
+                return;
+            }
 
-        sum /= count as f32;
-        sum = sum.normalize_or_zero();
-        sum *= max_speed.0;
+            sum /= count as f32;
+            sum = sum.normalize_or_zero();
+            sum *= max_speed.0;
 
-        let mut steer = sum - velocity.0;
-        steer = clamp_magnitude(steer, max_force.0);
-        acceleration.0 += steer * force_multipliers.alignment;
-    }
+            let mut steer = sum - velocity.0;
+            steer = clamp_magnitude(steer, max_force.0);
+            acceleration.0 += steer * force_multipliers.alignment;
+        },
+    );
 }
 
 fn cohesion(
@@ -176,33 +180,35 @@ fn cohesion(
 ) {
     let neighbor_distance = 50.;
 
-    for (transform, mut acceleration, velocity, max_speed, max_force) in query.iter_mut() {
-        let mut sum = Vec3::new(0., 0., 0.);
-        let mut count = 0;
+    query.par_iter_mut().for_each(
+        |(transform, mut acceleration, velocity, max_speed, max_force)| {
+            let mut sum = Vec3::new(0., 0., 0.);
+            let mut count = 0;
 
-        for (other_transform, _) in other_query.iter() {
-            let d = transform.translation.distance(other_transform.translation);
+            for (other_transform, _) in other_query.iter() {
+                let d = transform.translation.distance(other_transform.translation);
 
-            if d > 0. && d < neighbor_distance {
-                sum += other_transform.translation;
-                count += 1;
+                if d > 0. && d < neighbor_distance {
+                    sum += other_transform.translation;
+                    count += 1;
+                }
             }
-        }
 
-        if count == 0 {
-            continue;
-        }
+            if count == 0 {
+                return;
+            }
 
-        sum /= count as f32;
+            sum /= count as f32;
 
-        let mut desired_position = sum - transform.translation;
-        desired_position = desired_position.normalize_or_zero();
-        desired_position *= max_speed.0;
+            let mut desired_position = sum - transform.translation;
+            desired_position = desired_position.normalize_or_zero();
+            desired_position *= max_speed.0;
 
-        let mut steer = desired_position - velocity.0;
-        steer = clamp_magnitude(steer, max_force.0);
-        acceleration.0 += steer * force_multipliers.cohesion;
-    }
+            let mut steer = desired_position - velocity.0;
+            steer = clamp_magnitude(steer, max_force.0);
+            acceleration.0 += steer * force_multipliers.cohesion;
+        },
+    );
 }
 
 fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSpeed)>) {
