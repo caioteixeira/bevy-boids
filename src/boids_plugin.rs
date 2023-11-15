@@ -1,4 +1,10 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
+
+use bevy_spatial::{
+    kdtree::KDTree2, AutomaticUpdate, SpatialAccess, SpatialStructure, TransformMode,
+};
 
 #[derive(Resource)]
 pub struct ForceMultipliers {
@@ -19,12 +25,16 @@ pub struct MaxSpeed(pub f32);
 #[derive(Component)]
 pub struct MaxForce(pub f32);
 
+#[derive(Component)]
+pub struct TrackedByKdTree;
+
 #[derive(Bundle)]
 pub struct BoidBundle {
     pub velocity: Velocity,
     pub acceleration: Acceleration,
     pub max_speed: MaxSpeed,
     pub max_force: MaxForce,
+    pub tracked_by_kd_tree: TrackedByKdTree,
 }
 
 impl Default for BoidBundle {
@@ -34,6 +44,7 @@ impl Default for BoidBundle {
             acceleration: Acceleration(Vec3::new(0., 0., 0.)),
             max_speed: MaxSpeed(4.),
             max_force: MaxForce(0.1),
+            tracked_by_kd_tree: TrackedByKdTree,
         }
     }
 }
@@ -47,6 +58,12 @@ impl Plugin for BoidsPlugin {
             alignment: 1.0,
             cohesion: 1.0,
         })
+        .add_plugins(
+            AutomaticUpdate::<TrackedByKdTree>::new()
+                .with_spatial_ds(SpatialStructure::KDTree2)
+                .with_frequency(Duration::from_millis(1))
+                .with_transform(TransformMode::GlobalTransform),
+        )
         .add_systems(PreUpdate, wrap_around_screen)
         .add_systems(
             Update,
@@ -91,26 +108,27 @@ fn separate(
         &Velocity,
         &MaxSpeed,
         &MaxForce,
+        With<TrackedByKdTree>,
     )>,
-    other_query: Query<(&Transform, &Velocity)>,
     force_multipliers: Res<ForceMultipliers>,
+    kd_tree: Res<KDTree2<TrackedByKdTree>>,
 ) {
     let desired_separation = 20.;
 
     query.par_iter_mut().for_each(
-        |(transform, mut acceleration, velocity, max_speed, max_force)| {
+        |(transform, mut acceleration, velocity, max_speed, max_force, ())| {
             let mut sum = Vec3::new(0., 0., 0.);
             let mut count = 0;
+            let location = Vec2::new(transform.translation.x, transform.translation.y);
 
-            for (other_transform, _) in other_query.iter() {
-                let d = transform.translation.distance(other_transform.translation);
+            for (other_transform, _) in kd_tree.within_distance(location, desired_separation) {
+                let other_position = Vec3::new(other_transform.x, other_transform.y, 0.);
+                let distance = transform.translation.distance(other_position);
 
-                if (d > 0.) && (d < desired_separation) {
-                    let mut diff = transform.translation - other_transform.translation;
-                    diff = diff.normalize_or_zero() / d;
-                    sum += diff;
-                    count += 1;
-                }
+                let mut diff = transform.translation - other_position;
+                diff = diff.normalize_or_zero() / distance;
+                sum += diff;
+                count += 1;
             }
 
             if count > 0 {
@@ -132,22 +150,23 @@ fn align(
         &Velocity,
         &MaxSpeed,
         &MaxForce,
+        With<TrackedByKdTree>,
     )>,
-    other_query: Query<(&Transform, &Velocity)>,
+    other_query: Query<(&Transform, &Velocity), With<TrackedByKdTree>>,
     force_multipliers: Res<ForceMultipliers>,
+    kd_tree: Res<KDTree2<TrackedByKdTree>>,
 ) {
     let neighbor_distance = 50.;
 
     query.par_iter_mut().for_each(
-        |(transform, mut acceleration, velocity, max_speed, max_force)| {
+        |(transform, mut acceleration, velocity, max_speed, max_force, ())| {
             let mut sum = Vec3::new(0., 0., 0.);
             let mut count = 0;
+            let location = Vec2::new(transform.translation.x, transform.translation.y);
 
-            for (other_transform, other_velocity) in other_query.iter() {
-                let d = transform.translation.distance(other_transform.translation);
-
-                if d > 0. && d < neighbor_distance {
-                    sum += other_velocity.0;
+            for (_, other_entity) in kd_tree.within_distance(location, neighbor_distance) {
+                if let Ok((_, velocity)) = other_query.get(other_entity.unwrap()) {
+                    sum += velocity.0;
                     count += 1;
                 }
             }
@@ -168,15 +187,18 @@ fn align(
 }
 
 fn cohesion(
-    mut query: Query<(
-        &Transform,
-        &mut Acceleration,
-        &Velocity,
-        &MaxSpeed,
-        &MaxForce,
-    )>,
-    other_query: Query<(&Transform, &Velocity)>,
+    mut query: Query<
+        (
+            &Transform,
+            &mut Acceleration,
+            &Velocity,
+            &MaxSpeed,
+            &MaxForce,
+        ),
+        With<TrackedByKdTree>,
+    >,
     force_multipliers: Res<ForceMultipliers>,
+    kd_tree: Res<KDTree2<TrackedByKdTree>>,
 ) {
     let neighbor_distance = 50.;
 
@@ -184,14 +206,12 @@ fn cohesion(
         |(transform, mut acceleration, velocity, max_speed, max_force)| {
             let mut sum = Vec3::new(0., 0., 0.);
             let mut count = 0;
+            let location = Vec2::new(transform.translation.x, transform.translation.y);
 
-            for (other_transform, _) in other_query.iter() {
-                let d = transform.translation.distance(other_transform.translation);
-
-                if d > 0. && d < neighbor_distance {
-                    sum += other_transform.translation;
-                    count += 1;
-                }
+            for (other_transform, _) in kd_tree.within_distance(location, neighbor_distance) {
+                let other_position = Vec3::new(other_transform.x, other_transform.y, 0.);
+                sum += other_position;
+                count += 1;
             }
 
             if count == 0 {
