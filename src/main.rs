@@ -12,6 +12,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
     window::{PresentMode, WindowMode},
 };
+
 use boids_plugin::{BoidBundle, BoidsPlugin};
 use flow_field_plugin::FlowFieldFollower;
 use rand::Rng;
@@ -54,7 +55,7 @@ fn setup(
 
     let mut rng = rand::thread_rng();
 
-    for _i in 0..4000 {
+    for _i in 0..8000 {
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: meshes.add(shape::Circle::new(2.).into()).into(),

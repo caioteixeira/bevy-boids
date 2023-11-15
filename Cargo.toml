@@ -17,4 +17,5 @@ opt-level = 3
 
 [dependencies]
 bevy = "0.12"
+bevy_spatial = "0.7.0"
 rand = "0.8.5"
