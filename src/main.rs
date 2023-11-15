@@ -10,7 +10,7 @@ use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
     sprite::MaterialMesh2dBundle,
-    window::WindowMode,
+    window::{PresentMode, WindowMode},
 };
 use boids_plugin::{BoidBundle, BoidsPlugin};
 use flow_field_plugin::FlowFieldFollower;
@@ -25,6 +25,7 @@ fn main() {
             primary_window: Some(Window {
                 title: "Bevy Boids".into(),
                 mode: WindowMode::Windowed,
+                present_mode: PresentMode::AutoNoVsync,
 
                 // Tells wasm to resize the window according to the available canvas
                 fit_canvas_to_parent: true,
@@ -53,7 +54,7 @@ fn setup(
 
     let mut rng = rand::thread_rng();
 
-    for _i in 0..8000 {
+    for _i in 0..4000 {
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: meshes.add(shape::Circle::new(2.).into()).into(),
