@@ -9,7 +9,7 @@
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
-    sprite::MaterialMesh2dBundle,
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
     window::{PresentMode, WindowMode},
 };
 
@@ -52,13 +52,13 @@ fn setup(
     commands.spawn(Camera2dBundle::default());
 
     let material_handle = materials.add(ColorMaterial::from(Color::GREEN));
-
+    let mesh_handle: Mesh2dHandle = meshes.add(shape::Circle::new(2.).into()).into();
     let mut rng = rand::thread_rng();
 
-    for _i in 0..8000 {
+    for _i in 0..4000 {
         commands.spawn((
             MaterialMesh2dBundle {
-                mesh: meshes.add(shape::Circle::new(2.).into()).into(),
+                mesh: mesh_handle.clone(),
                 material: material_handle.clone(),
                 transform: Transform {
                     translation: Vec3::new(
