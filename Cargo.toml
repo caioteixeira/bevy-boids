@@ -11,6 +11,9 @@ license = "MIT OR Apache-2.0 OR CC0-1.0"
 [profile.dev]
 opt-level = 1
 
+[profile.release]
+debug = true
+
 # Enable high optimizations for dependencies (incl. Bevy), but not for our code:
 [profile.dev.package."*"]
 opt-level = 3
