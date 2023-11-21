@@ -8,8 +8,8 @@ license = "MIT OR Apache-2.0 OR CC0-1.0"
 # https://bevyengine.org/learn/book/getting-started/setup/#compile-with-performance-optimizations
 
 # Enable a small amount of optimization in debug mode
-[profile.dev]
-opt-level = 1
+#[profile.dev]
+#opt-level = 1
 
 [profile.release]
 debug = true
@@ -20,5 +20,6 @@ opt-level = 3
 
 [dependencies]
 bevy = "0.12"
-bevy_spatial = "0.7.0"
+kd-tree = { version = "0.5.1", features = ["rayon"] }
 rand = "0.8.5"
+typenum = "1.17.0"
