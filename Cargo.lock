@@ -344,8 +344,9 @@ name = "bevy-boids"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_spatial",
+ "kd-tree",
  "rand",
+ "typenum",
 ]
 
 [[package]]
@@ -886,18 +887,6 @@ dependencies = [
  "serde",
  "thiserror",
  "uuid",
-]
-
-[[package]]
-name = "bevy_spatial"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56e846c2c81c0f82e098b5b3b0b25e74b6f110e87930008ed7359a20c47d832a"
-dependencies = [
- "bevy",
- "kd-tree",
- "num-traits",
- "typenum",
 ]
 
 [[package]]
