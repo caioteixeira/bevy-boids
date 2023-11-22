@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::query::BatchingStrategy, prelude::*};
 use kd_tree::{KdPoint, KdTree};
 
 #[derive(Clone, Debug)]
@@ -166,40 +166,43 @@ fn separate(
 ) {
     let desired_separation = 10.;
 
-    query.par_iter_mut().for_each(
-        |(transform, mut separation_force, velocity, max_speed, max_force, ())| {
-            let mut sum = Vec3::new(0., 0., 0.);
-            let mut count = 0;
-            let location = Vec2::new(transform.translation.x, transform.translation.y);
+    query
+        .par_iter_mut()
+        .batching_strategy(BatchingStrategy::fixed(100))
+        .for_each(
+            |(transform, mut separation_force, velocity, max_speed, max_force, ())| {
+                let mut sum = Vec3::new(0., 0., 0.);
+                let mut count = 0;
+                let location = Vec2::new(transform.translation.x, transform.translation.y);
 
-            let results =
-                kd_tree.query_within_radius(&[location.x, location.y], desired_separation);
+                let results =
+                    kd_tree.query_within_radius(&[location.x, location.y], desired_separation);
 
-            for result in &results {
-                let other_position = Vec3::new(result.point[0], result.point[1], 0.);
-                let distance = transform.translation.distance(other_position);
+                for result in &results {
+                    let other_position = Vec3::new(result.point[0], result.point[1], 0.);
+                    let distance = transform.translation.distance(other_position);
 
-                if distance == 0.0 {
-                    continue;
+                    if distance == 0.0 {
+                        continue;
+                    }
+
+                    let mut diff = transform.translation - other_position;
+                    diff = diff.normalize_or_zero() / distance;
+                    sum += diff;
+                    count += 1;
                 }
 
-                let mut diff = transform.translation - other_position;
-                diff = diff.normalize_or_zero() / distance;
-                sum += diff;
-                count += 1;
-            }
+                if count > 0 {
+                    sum /= count as f32;
+                    sum = sum.normalize_or_zero();
+                    sum *= max_speed.0;
+                    let mut steer = sum - velocity.0;
 
-            if count > 0 {
-                sum /= count as f32;
-                sum = sum.normalize_or_zero();
-                sum *= max_speed.0;
-                let mut steer = sum - velocity.0;
-
-                steer = clamp_magnitude(steer, max_force.0);
-                separation_force.0 += steer * force_multipliers.separation;
-            }
-        },
-    );
+                    steer = clamp_magnitude(steer, max_force.0);
+                    separation_force.0 += steer * force_multipliers.separation;
+                }
+            },
+        );
 }
 
 fn align_and_cohesion(
@@ -218,59 +221,63 @@ fn align_and_cohesion(
 ) {
     let neighbor_distance = 20.;
 
-    query.par_iter_mut().for_each(
-        |(
-            transform,
-            mut aligment_force,
-            mut cohesion_force,
-            velocity,
-            max_speed,
-            max_force,
-            (),
-        )| {
-            let mut position_sum = Vec3::new(0., 0., 0.);
-            let mut velocity_sum = Vec3::new(0., 0., 0.);
-            let mut count = 0;
-            let location = Vec2::new(transform.translation.x, transform.translation.y);
+    query
+        .par_iter_mut()
+        .batching_strategy(BatchingStrategy::fixed(100))
+        .for_each(
+            |(
+                transform,
+                mut aligment_force,
+                mut cohesion_force,
+                velocity,
+                max_speed,
+                max_force,
+                (),
+            )| {
+                let mut position_sum = Vec3::new(0., 0., 0.);
+                let mut velocity_sum = Vec3::new(0., 0., 0.);
+                let mut count = 0;
+                let location = Vec2::new(transform.translation.x, transform.translation.y);
 
-            let results = kd_tree.query_within_radius(&[location.x, location.y], neighbor_distance);
+                let results =
+                    kd_tree.query_within_radius(&[location.x, location.y], neighbor_distance);
 
-            for result in &results {
-                let other_position = Vec3::new(result.point[0], result.point[1], 0.);
-                position_sum += other_position;
+                for result in &results {
+                    let other_position = Vec3::new(result.point[0], result.point[1], 0.);
+                    position_sum += other_position;
 
-                if let Ok((_, velocity)) = other_query.get(result.entity) {
-                    velocity_sum += velocity.0;
+                    if let Ok((_, velocity)) = other_query.get(result.entity) {
+                        velocity_sum += velocity.0;
+                    }
+                    count += 1;
                 }
-                count += 1;
-            }
 
-            if count == 0 {
-                return;
-            }
+                if count == 0 {
+                    return;
+                }
 
-            // Compute alignment
-            velocity_sum /= count as f32;
-            velocity_sum = velocity_sum.normalize_or_zero();
-            velocity_sum *= max_speed.0;
+                // Compute alignment
+                velocity_sum /= count as f32;
+                velocity_sum = velocity_sum.normalize_or_zero();
+                velocity_sum *= max_speed.0;
 
-            let mut velocity_diff = velocity_sum - velocity.0;
+                let mut velocity_diff = velocity_sum - velocity.0;
 
-            velocity_diff = clamp_magnitude(velocity_diff, max_force.0);
-            aligment_force.0 += velocity_diff * force_multipliers.alignment;
+                velocity_diff = clamp_magnitude(velocity_diff, max_force.0);
+                aligment_force.0 += velocity_diff * force_multipliers.alignment;
 
-            // Compute cohesion
-            position_sum /= count as f32;
+                // Compute cohesion
+                position_sum /= count as f32;
 
-            let mut desired_position = position_sum - transform.translation;
-            desired_position = desired_position.normalize_or_zero();
-            desired_position *= max_speed.0;
+                let mut desired_position = position_sum - transform.translation;
+                desired_position = desired_position.normalize_or_zero();
+                desired_position *= max_speed.0;
 
-            let mut steer = desired_position - velocity.0;
-            steer = clamp_magnitude(steer, max_force.0);
-            cohesion_force.0 += steer * force_multipliers.cohesion;
-        },
-    );
+                let mut steer = desired_position - velocity.0;
+                steer = clamp_magnitude(steer, max_force.0);
+                cohesion_force.0 += steer * force_multipliers.cohesion;
+            },
+        );
 }
 
 fn apply_acceleration(
