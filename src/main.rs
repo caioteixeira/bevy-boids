@@ -57,7 +57,7 @@ fn setup(
         .into();
     let mut rng = rand::thread_rng();
 
-    for _i in 0..2000 {
+    for _i in 0..32000 {
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: mesh_handle.clone(),

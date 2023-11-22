@@ -31,6 +31,15 @@ pub struct ForceMultipliers {
 pub struct Velocity(pub Vec3);
 
 #[derive(Component)]
+pub struct SeparationForce(pub Vec3);
+
+#[derive(Component)]
+pub struct AligmentForce(pub Vec3);
+
+#[derive(Component)]
+pub struct CohesionForce(pub Vec3);
+
+#[derive(Component)]
 pub struct Acceleration(pub Vec3);
 
 #[derive(Component)]
@@ -45,6 +54,9 @@ pub struct TrackedByKdTree;
 #[derive(Bundle)]
 pub struct BoidBundle {
     pub velocity: Velocity,
+    pub aligment_force: AligmentForce,
+    pub separation_force: SeparationForce,
+    pub cohesion_force: CohesionForce,
     pub acceleration: Acceleration,
     pub max_speed: MaxSpeed,
     pub max_force: MaxForce,
@@ -55,6 +67,9 @@ impl Default for BoidBundle {
     fn default() -> Self {
         Self {
             velocity: Velocity(Vec3::new(0., 0., 0.)),
+            aligment_force: AligmentForce(Vec3::new(0., 0., 0.)),
+            separation_force: SeparationForce(Vec3::new(0., 0., 0.)),
+            cohesion_force: CohesionForce(Vec3::new(0., 0., 0.)),
             acceleration: Acceleration(Vec3::new(0., 0., 0.)),
             max_speed: MaxSpeed(4. * 60.),
             max_force: MaxForce(0.5 * 60.),
@@ -131,7 +146,7 @@ fn wrap_around_screen(
 fn separate(
     mut query: Query<(
         &Transform,
-        &mut Acceleration,
+        &mut SeparationForce,
         &Velocity,
         &MaxSpeed,
         &MaxForce,
@@ -143,7 +158,7 @@ fn separate(
     let desired_separation = 10.;
 
     query.par_iter_mut().for_each(
-        |(transform, mut acceleration, velocity, max_speed, max_force, ())| {
+        |(transform, mut separation_force, velocity, max_speed, max_force, ())| {
             let mut sum = Vec3::new(0., 0., 0.);
             let mut count = 0;
             let location = Vec2::new(transform.translation.x, transform.translation.y);
@@ -173,7 +188,7 @@ fn separate(
                 let mut steer = sum - velocity.0;
 
                 steer = clamp_magnitude(steer, max_force.0);
-                acceleration.0 += steer * force_multipliers.separation;
+                separation_force.0 += steer * force_multipliers.separation;
             }
         },
     );
@@ -182,7 +197,7 @@ fn separate(
 fn align(
     mut query: Query<(
         &Transform,
-        &mut Acceleration,
+        &mut AligmentForce,
         &Velocity,
         &MaxSpeed,
         &MaxForce,
@@ -195,7 +210,7 @@ fn align(
     let neighbor_distance = 20.;
 
     query.par_iter_mut().for_each(
-        |(transform, mut acceleration, velocity, max_speed, max_force, ())| {
+        |(transform, mut aligment_force, velocity, max_speed, max_force, ())| {
             let mut sum = Vec3::new(0., 0., 0.);
             let mut count = 0;
             let location = Vec2::new(transform.translation.x, transform.translation.y);
@@ -222,7 +237,7 @@ fn align(
             let mut steer = sum - velocity.0;
 
             steer = clamp_magnitude(steer, max_force.0);
-            acceleration.0 += steer * force_multipliers.alignment;
+            aligment_force.0 += steer * force_multipliers.alignment;
         },
     );
 }
@@ -231,7 +246,7 @@ fn cohesion(
     mut query: Query<
         (
             &Transform,
-            &mut Acceleration,
+            &mut CohesionForce,
             &Velocity,
             &MaxSpeed,
             &MaxForce,
@@ -244,7 +259,7 @@ fn cohesion(
     let neighbor_distance = 20.;
 
     query.par_iter_mut().for_each(
-        |(transform, mut acceleration, velocity, max_speed, max_force)| {
+        |(transform, mut cohesion_force, velocity, max_speed, max_force)| {
             let mut sum = Vec3::new(0., 0., 0.);
             let mut count = 0;
             let location = Vec2::new(transform.translation.x, transform.translation.y);
@@ -271,21 +286,44 @@ fn cohesion(
 
             let mut steer = desired_position - velocity.0;
             steer = clamp_magnitude(steer, max_force.0);
-            acceleration.0 += steer * force_multipliers.cohesion;
+            cohesion_force.0 += steer * force_multipliers.cohesion;
         },
     );
 }
 
 fn apply_acceleration(
-    mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSpeed)>,
+    mut query: Query<(
+        &mut Velocity,
+        &mut Acceleration,
+        &mut AligmentForce,
+        &mut SeparationForce,
+        &mut CohesionForce,
+        &MaxSpeed,
+    )>,
     time: Res<Time>,
 ) {
-    for (mut velocity, mut acceleration, max_speed) in query.iter_mut() {
-        velocity.0 += acceleration.0 * time.delta_seconds();
-        velocity.0 = clamp_magnitude(velocity.0, max_speed.0);
+    query.par_iter_mut().for_each(
+        |(
+            mut velocity,
+            mut acceleration,
+            mut alignment,
+            mut separation,
+            mut cohesion,
+            max_speed,
+        )| {
+            acceleration.0 += alignment.0;
+            acceleration.0 += separation.0;
+            acceleration.0 += cohesion.0;
 
-        acceleration.0 *= 0.;
-    }
+            velocity.0 += acceleration.0 * time.delta_seconds();
+            velocity.0 = clamp_magnitude(velocity.0, max_speed.0);
+
+            acceleration.0 *= 0.;
+            alignment.0 *= 0.;
+            separation.0 *= 0.;
+            cohesion.0 *= 0.;
+        },
+    );
 }
 
 fn update_position(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
