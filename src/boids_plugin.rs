@@ -20,6 +20,15 @@ pub struct SpatialTree {
     pub tree: KdTree<KdTreeItem>,
 }
 
+impl SpatialTree {
+    pub fn query_within_radius(&self, point: &[f32; 2], radius: f32) -> Vec<&KdTreeItem> {
+        //let trace_span = info_span!("query_within_radius", name = "query_within_radius");
+        //let _span_guard = trace_span.enter();
+
+        self.tree.within_radius(point, radius)
+    }
+}
+
 #[derive(Resource)]
 pub struct ForceMultipliers {
     separation: f32,
@@ -95,8 +104,8 @@ impl Plugin for BoidsPlugin {
             Update,
             (
                 separate,
-                align,
-                cohesion,
+                align_and_cohesion,
+                //cohesion,
                 apply_acceleration,
                 update_position,
             ),
@@ -163,9 +172,8 @@ fn separate(
             let mut count = 0;
             let location = Vec2::new(transform.translation.x, transform.translation.y);
 
-            let results = kd_tree
-                .tree
-                .within_radius(&[location.x, location.y], desired_separation);
+            let results =
+                kd_tree.query_within_radius(&[location.x, location.y], desired_separation);
 
             for result in &results {
                 let other_position = Vec3::new(result.point[0], result.point[1], 0.);
@@ -194,10 +202,11 @@ fn separate(
     );
 }
 
-fn align(
+fn align_and_cohesion(
     mut query: Query<(
         &Transform,
         &mut AligmentForce,
+        &mut CohesionForce,
         &Velocity,
         &MaxSpeed,
         &MaxForce,
@@ -210,67 +219,29 @@ fn align(
     let neighbor_distance = 20.;
 
     query.par_iter_mut().for_each(
-        |(transform, mut aligment_force, velocity, max_speed, max_force, ())| {
-            let mut sum = Vec3::new(0., 0., 0.);
+        |(
+            transform,
+            mut aligment_force,
+            mut cohesion_force,
+            velocity,
+            max_speed,
+            max_force,
+            (),
+        )| {
+            let mut position_sum = Vec3::new(0., 0., 0.);
+            let mut velocity_sum = Vec3::new(0., 0., 0.);
             let mut count = 0;
             let location = Vec2::new(transform.translation.x, transform.translation.y);
 
-            let results = kd_tree
-                .tree
-                .within_radius(&[location.x, location.y], neighbor_distance);
-
-            for result in &results {
-                if let Ok((_, velocity)) = other_query.get(result.entity) {
-                    sum += velocity.0;
-                    count += 1;
-                }
-            }
-
-            if count == 0 {
-                return;
-            }
-
-            sum /= count as f32;
-            sum = sum.normalize_or_zero();
-            sum *= max_speed.0;
-
-            let mut steer = sum - velocity.0;
-
-            steer = clamp_magnitude(steer, max_force.0);
-            aligment_force.0 += steer * force_multipliers.alignment;
-        },
-    );
-}
-
-fn cohesion(
-    mut query: Query<
-        (
-            &Transform,
-            &mut CohesionForce,
-            &Velocity,
-            &MaxSpeed,
-            &MaxForce,
-        ),
-        With<TrackedByKdTree>,
-    >,
-    force_multipliers: Res<ForceMultipliers>,
-    kd_tree: Res<SpatialTree>,
-) {
-    let neighbor_distance = 20.;
-
-    query.par_iter_mut().for_each(
-        |(transform, mut cohesion_force, velocity, max_speed, max_force)| {
-            let mut sum = Vec3::new(0., 0., 0.);
-            let mut count = 0;
-            let location = Vec2::new(transform.translation.x, transform.translation.y);
-
-            let results = kd_tree
-                .tree
-                .within_radius(&[location.x, location.y], neighbor_distance);
+            let results = kd_tree.query_within_radius(&[location.x, location.y], neighbor_distance);
 
             for result in &results {
                 let other_position = Vec3::new(result.point[0], result.point[1], 0.);
-                sum += other_position;
+                position_sum += other_position;
+
+                if let Ok((_, velocity)) = other_query.get(result.entity) {
+                    velocity_sum += velocity.0;
+                }
                 count += 1;
             }
 
@@ -278,9 +249,20 @@ fn cohesion(
                 return;
             }
 
-            sum /= count as f32;
+            // Compute alignment
+            velocity_sum /= count as f32;
+            velocity_sum = velocity_sum.normalize_or_zero();
+            velocity_sum *= max_speed.0;
 
-            let mut desired_position = sum - transform.translation;
+            let mut velocity_diff = velocity_sum - velocity.0;
+
+            velocity_diff = clamp_magnitude(velocity_diff, max_force.0);
+            aligment_force.0 += velocity_diff * force_multipliers.alignment;
+
+            // Compute cohesion
+            position_sum /= count as f32;
+
+            let mut desired_position = position_sum - transform.translation;
             desired_position = desired_position.normalize_or_zero();
             desired_position *= max_speed.0;
 
