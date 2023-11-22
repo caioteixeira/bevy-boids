@@ -14,7 +14,7 @@ use bevy::{
 };
 
 use boids_plugin::{BoidBundle, BoidsPlugin};
-use flow_field_plugin::{FlowFieldFollower, FlowFieldPlugin};
+use flow_field_plugin::FlowFieldFollower;
 use rand::Rng;
 
 pub mod boids_plugin;
@@ -39,7 +39,7 @@ fn main() {
         .add_plugins(LogDiagnosticsPlugin::default())
         .add_plugins(FrameTimeDiagnosticsPlugin)
         .add_plugins(BoidsPlugin)
-        .add_plugins(FlowFieldPlugin)
+        //.add_plugins(FlowFieldPlugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -55,15 +55,15 @@ fn setup(
     let mesh_handle: Mesh2dHandle = meshes.add(shape::Circle::new(2.).into()).into();
     let mut rng = rand::thread_rng();
 
-    for _i in 0..8000 {
+    for _i in 0..4000 {
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: mesh_handle.clone(),
                 material: material_handle.clone(),
                 transform: Transform {
                     translation: Vec3::new(
-                        rng.gen_range(-1000.0..1000.0),
                         rng.gen_range(-800.0..800.0),
+                        rng.gen_range(-500.0..500.0),
                         0.,
                     ),
                     ..Default::default()
