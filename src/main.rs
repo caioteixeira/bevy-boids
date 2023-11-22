@@ -52,10 +52,10 @@ fn setup(
     commands.spawn(Camera2dBundle::default());
 
     let material_handle = materials.add(ColorMaterial::from(Color::GREEN));
-    let mesh_handle: Mesh2dHandle = meshes.add(shape::Circle::new(2.).into()).into();
+    let mesh_handle: Mesh2dHandle = meshes.add(shape::Circle::new(0.7).into()).into();
     let mut rng = rand::thread_rng();
 
-    for _i in 0..4000 {
+    for _i in 0..2000 {
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: mesh_handle.clone(),

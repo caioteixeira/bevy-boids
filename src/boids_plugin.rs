@@ -140,7 +140,7 @@ fn separate(
     force_multipliers: Res<ForceMultipliers>,
     kd_tree: Res<SpatialTree>,
 ) {
-    let desired_separation = 20.;
+    let desired_separation = 10.;
 
     query.par_iter_mut().for_each(
         |(transform, mut acceleration, velocity, max_speed, max_force, ())| {
@@ -192,7 +192,7 @@ fn align(
     force_multipliers: Res<ForceMultipliers>,
     kd_tree: Res<SpatialTree>,
 ) {
-    let neighbor_distance = 50.;
+    let neighbor_distance = 20.;
 
     query.par_iter_mut().for_each(
         |(transform, mut acceleration, velocity, max_speed, max_force, ())| {
@@ -241,7 +241,7 @@ fn cohesion(
     force_multipliers: Res<ForceMultipliers>,
     kd_tree: Res<SpatialTree>,
 ) {
-    let neighbor_distance = 50.;
+    let neighbor_distance = 20.;
 
     query.par_iter_mut().for_each(
         |(transform, mut acceleration, velocity, max_speed, max_force)| {
