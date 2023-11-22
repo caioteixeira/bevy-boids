@@ -327,10 +327,10 @@ fn apply_acceleration(
 }
 
 fn update_position(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
-    for (mut transform, velocity) in query.iter_mut() {
-        transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.) * time.delta_seconds();
+    query.par_iter_mut().for_each(|(mut transform, velocity)| {
+        transform.translation += velocity.0 * time.delta_seconds();
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
-    }
+    });
 }
 
 pub fn clamp_magnitude(value: Vec3, max: f32) -> Vec3 {
