@@ -7,7 +7,6 @@ pub struct KdTreeItem {
     entity: Entity,
 }
 
-// implement `KdPoint` for your item type.
 impl KdPoint for KdTreeItem {
     type Scalar = f32;
     type Dim = typenum::U2; // 2 dimensional tree.
@@ -57,8 +56,8 @@ impl Default for BoidBundle {
         Self {
             velocity: Velocity(Vec3::new(0., 0., 0.)),
             acceleration: Acceleration(Vec3::new(0., 0., 0.)),
-            max_speed: MaxSpeed(4.),
-            max_force: MaxForce(0.1),
+            max_speed: MaxSpeed(4. * 60.),
+            max_force: MaxForce(0.5 * 60.),
             tracked_by_kd_tree: TrackedByKdTree,
         }
     }
@@ -71,7 +70,7 @@ impl Plugin for BoidsPlugin {
         app.insert_resource(ForceMultipliers {
             separation: 2.0,
             alignment: 1.0,
-            cohesion: 0.0,
+            cohesion: 1.0,
         })
         .insert_resource(SpatialTree {
             tree: kd_tree::KdTree::build_by_ordered_float(Vec::new()),
@@ -161,23 +160,11 @@ fn separate(
                     continue;
                 }
 
-                //info!("distance: {:?}", distance);
-
                 let mut diff = transform.translation - other_position;
                 diff = diff.normalize_or_zero() / distance;
                 sum += diff;
                 count += 1;
             }
-
-            /*for (other_transform, _) in kd_tree.tree.within_distance(location, desired_separation) {
-                let other_position = Vec3::new(other_transform.x, other_transform.y, 0.);
-                let distance = transform.translation.distance(other_position);
-
-                let mut diff = transform.translation - other_position;
-                diff = diff.normalize_or_zero() / distance;
-                sum += diff;
-                count += 1;
-            }*/
 
             if count > 0 {
                 sum /= count as f32;
@@ -223,13 +210,6 @@ fn align(
                     count += 1;
                 }
             }
-
-            /*for (_, other_entity) in kd_tree.within_distance(location, neighbor_distance) {
-                if let Ok((_, velocity)) = other_query.get(other_entity.unwrap()) {
-                    sum += velocity.0;
-                    count += 1;
-                }
-            }*/
 
             if count == 0 {
                 return;
@@ -279,12 +259,6 @@ fn cohesion(
                 count += 1;
             }
 
-            /*for (other_transform, _) in kd_tree.within_distance(location, neighbor_distance) {
-                let other_position = Vec3::new(other_transform.x, other_transform.y, 0.);
-                sum += other_position;
-                count += 1;
-            }*/
-
             if count == 0 {
                 return;
             }
@@ -302,24 +276,21 @@ fn cohesion(
     );
 }
 
-fn apply_acceleration(mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSpeed)>) {
+fn apply_acceleration(
+    mut query: Query<(&mut Velocity, &mut Acceleration, &MaxSpeed)>,
+    time: Res<Time>,
+) {
     for (mut velocity, mut acceleration, max_speed) in query.iter_mut() {
-        velocity.0 += acceleration.0;
+        velocity.0 += acceleration.0 * time.delta_seconds();
         velocity.0 = clamp_magnitude(velocity.0, max_speed.0);
 
         acceleration.0 *= 0.;
     }
 }
 
-fn update_position(mut query: Query<(&mut Transform, &Velocity)> /*mut gizmos: Gizmos*/) {
+fn update_position(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
     for (mut transform, velocity) in query.iter_mut() {
-        /*gizmos.line(
-            transform.translation,
-            transform.translation + velocity.0 * 100.,
-            Color::RED,
-        );*/
-
-        transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.);
+        transform.translation += Vec3::new(velocity.0.x, velocity.0.y, 0.) * time.delta_seconds();
         transform.rotation = Quat::from_rotation_z(velocity.0.y.atan2(velocity.0.x) + 180.);
     }
 }
